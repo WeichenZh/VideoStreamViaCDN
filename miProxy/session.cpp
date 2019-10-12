@@ -12,7 +12,8 @@
 #include <time.h>
 #include <chrono>
 #include <array>
-#include<map>
+#include <map>
+#include <algorithm>
 
 //parameters
 #define MAXCLIENT 100
@@ -63,7 +64,7 @@ Proxy::Proxy(int lp, char const *ho, double ap, char const *lg){
     strcpy(serverIp, ho);
     alpha    = ap;
     strcpy(log_path, lg);
-    print();//TODO
+    print();
 }
 
 int connect_CDN(char const *host, char *cdn_addr)
@@ -97,6 +98,20 @@ int recv_http(int client_socket, char *buffer){
     }
     else buffer[0] = '\0';
     return ctr;
+}
+
+void Proxy::readXML(){
+    //TODO--message will be in buffer
+    //e.g. you can directly use variable "buffer"
+    string buff(buffer);
+    ssize_t pos = buff.find("bitrate");
+    while (pos != string::npos){
+        pos += 9;
+        ssize_t pos_end = buff.find("\n",pos);
+        tps.push_back(stoi(buff.substr(pos, pos_end-pos-1)));
+        pos = buff.find("bitrate", pos);
+    }
+    sort(tps.begin(), tps.begin()+tps.size());
 }
 
 void Proxy::write_to_logfile(char const* browser_ip){

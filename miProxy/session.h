@@ -3,11 +3,13 @@
 #define BUFFERSIZE 1048576
 #define BUFFERSIZESMALL 1024
 #define IPSIZE 30
+#include <vector>
+using namespace std;
 
 class Proxy
 {
     int port, master_socket, cdn_socket, new_socket, valread;
-    int tps[4] = {10, 100, 500, 1000}; 
+    vector<int> tps;
     double alpha, tp_estimated=-1.0;
     char buffer[BUFFERSIZE] = {0};
     char serverIp[IPSIZE], log_path[BUFFERSIZESMALL];
@@ -18,7 +20,7 @@ class Proxy
     void add_client(int new_socket);
     void rearrange_GET();
     void update_tp(int numbits, double duration_ns);
-    void readXML(){}//TODO
+    void readXML();//TODO
     void write_to_logfile(char const *browser_ip);//TODO
 public:
     Proxy(int lp, char const *ho, double ap, char const *lg);
