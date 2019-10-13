@@ -268,14 +268,16 @@ void get_host_from_DNS(char const *host, int port, char *host_cdn)
     if(inet_pton(AF_INET, host, &serv_addr.sin_addr)<=0) err("Invalid address/ Address not supported");
     
     if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) err("Connection Failed");
-    
+
+    TODO(sock, host_cdn);
+    /*
     valread = recv(sock, buffer, BUFFERSIZESMALL, 0);
     send(sock , query, strlen(query), 0);
     valread = recv(sock, buffer, BUFFERSIZESMALL, 0);
-    
     buffer[valread] = '\0';
+    */
 
     close(sock);
-    strcpy(host_cdn, buffer);
-    printf("%s\n%s\n", buffer, host_cdn);
+    //strcpy(host_cdn, buffer);
+    //printf("%s\n%s\n", buffer, host_cdn);
 }
