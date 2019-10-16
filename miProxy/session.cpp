@@ -7,6 +7,7 @@
 #include <string.h> 
 #include <arpa/inet.h> 
 #include "session.h"
+#include "dns_sender.h"
 #include <ctime>
 #include <vector>
 #include <time.h>
@@ -188,7 +189,6 @@ void Proxy::run(){
         for (auto& client_socket: client_sockets){
             if (client_socket != 0) FD_SET(client_socket, &rfds);
         }
-        //printf("Waiting for new request...\n");
 
         if (select(FD_SETSIZE, &rfds, NULL, NULL, NULL) < 0) err("select error");
 
@@ -222,8 +222,6 @@ void Proxy::run(){
                     client_socket = 0;
                 }
                 else{
-                    //printf("\n---New MSG---\n");
-                    //printHeader("from", buffer);
                     bool is_seg = (strstr(buffer,"Seg") != NULL);
 
                     if (strstr(buffer,".f4m") != NULL){
@@ -244,8 +242,6 @@ void Proxy::run(){
                     if (is_seg)
                         write_to_logfile(inet_ntoa(address_client.sin_addr));
                     send(client_socket, buffer, valread, 0);
-                    //printf("Sending back to IP: %s, port: %d\n",
-                    //       inet_ntoa(address_client.sin_addr), ntohs(address_client.sin_port));
                 }
             }
         }
@@ -256,28 +252,20 @@ void get_host_from_DNS(char const *host, int port, char *host_cdn)
 {
     int sock = 0, valread; 
     struct sockaddr_in serv_addr; 
-    char buffer[BUFFERSIZESMALL]={0}, *printer;
-    char const *query = "lookup:video.cse.umich.edu";
+    char buffer[BUFFERSIZESMALL]={0}, host_buff[BUFFERSIZESMALL];
+    ushort TransID = 1000;
+    char *DomainName = "video.cse.umich.edu";
+
+    strcpy(host_buff, host);
     
     if ((sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) err("Socket creation error");
 
-    serv_addr.sin_family = AF_INET; 
-    serv_addr.sin_port = htons(port); 
-    
-    // Convert IPv4 and IPv6 addresses from text to binary form 
-    if(inet_pton(AF_INET, host, &serv_addr.sin_addr)<=0) err("Invalid address/ Address not supported");
-    
-    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) err("Connection Failed");
+    SendDndQueryPack(&sock, TransID, DomainName, host_buff, port);
+    RecvDnsPack(&sock, TransID, buffer);
 
-    TODO(sock, host_cdn);
-    /*
-    valread = recv(sock, buffer, BUFFERSIZESMALL, 0);
-    send(sock , query, strlen(query), 0);
-    valread = recv(sock, buffer, BUFFERSIZESMALL, 0);
-    buffer[valread] = '\0';
-    */
+    cout << "DomainAddr is: " << buffer << endl;
+
+    strcpy(host_cdn, buffer);
 
     close(sock);
-    //strcpy(host_cdn, buffer);
-    //printf("%s\n%s\n", buffer, host_cdn);
 }

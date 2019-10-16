@@ -39,6 +39,7 @@ int main(int argc, char const *argv[]){
 			alpha = atof(argv[5]);
 
 			get_host_from_DNS(argv[3], atoi(argv[4]), host);
+			printf("GET web server addr.: %s\n", host);
 		}
 		else err();
 
