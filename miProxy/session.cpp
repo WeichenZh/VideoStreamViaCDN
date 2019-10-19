@@ -66,7 +66,7 @@ Proxy::Proxy(int lp, char const *ho, double ap, char const *lg){
     strcpy(serverIp, ho);
     alpha    = ap;
     strcpy(log_path, lg);
-    print();
+    //print();
 }
 
 int connect_CDN(char const *host, char *cdn_addr)
@@ -134,8 +134,8 @@ void Proxy::write_to_logfile(char const* browser_ip){
 }
 
 void Proxy::update_tp(int numbits, double duration_ms){
-    duration_curr = duration_ms;
-    tp_curr = numbits/duration_ms;//Kbps
+    duration_curr = duration_ms/2;
+    tp_curr = numbits/duration_curr;//Kbps
     tp_estimated = (tp_estimated<0)? tp_curr: (alpha*tp_curr+(1-alpha)*tp_estimated);
 }
 
@@ -198,13 +198,13 @@ void Proxy::run(){
         if (select(FD_SETSIZE, &rfds, NULL, NULL, NULL) < 0) err("select error");
 
         if (FD_ISSET(master_socket, &rfds)){
-            printf("\n---New Host---\n");
+            //printf("\n---New Host---\n");
             new_socket = accept(master_socket, (struct sockaddr *)&address_client, 
                                 (socklen_t*)&addrlen);
             if (new_socket < 0) err("accept");
-            printf("Message: %s\n", buffer);
-            printf("Socket fd is %d, IP is: %s, port: %d\n", 
-                   new_socket, inet_ntoa(address_client.sin_addr), ntohs(address_client.sin_port));
+            //printf("Message: %s\n", buffer);
+            //printf("Socket fd is %d, IP is: %s, port: %d\n", 
+            //       new_socket, inet_ntoa(address_client.sin_addr), ntohs(address_client.sin_port));
             for (auto& client_socket: client_sockets){
                 if (client_socket==0){
                     client_socket = new_socket;
@@ -220,9 +220,9 @@ void Proxy::run(){
                 if (client_socket==cdn_socket) printf("Received Message FROM cdn_socket\n");
                 
                 if (valread == 0){//end
-                    printf("\n---Host disconnected---\n");
-                    printf("IP: %s, port: %d\n",
-                           inet_ntoa(address_client.sin_addr), ntohs(address_client.sin_port));
+                    //printf("\n---Host disconnected---\n");
+                    //printf("IP: %s, port: %d\n",
+                    //       inet_ntoa(address_client.sin_addr), ntohs(address_client.sin_port));
                     close(client_socket);
                     client_socket = 0;
                 }
