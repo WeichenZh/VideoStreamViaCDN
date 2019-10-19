@@ -3,6 +3,7 @@
 #include <sys/socket.h> 
 #include <stdlib.h> 
 #include <iostream>
+#include <fstream>
 #include <netinet/in.h> 
 #include <string.h> 
 #include <arpa/inet.h> 
@@ -15,7 +16,7 @@
 #include <array>
 #include <map>
 #include <algorithm>
-
+#
 //parameters
 #define MAXCLIENT 100
 #define MAXURL 128
@@ -123,8 +124,11 @@ void Proxy::write_to_logfile(char const* browser_ip){
     log += sep + to_string(duration_curr);//duration
     log += sep + to_string(tp_curr);//tput
     log += sep + to_string(tp_estimated);//avg-tput
-    log += sep + strBuff.substr(0, strBuff.find("Seg")) + "\n";//bitrate
-    printf("%s", log.c_str());
+    log += sep + strBuff.substr(0, strBuff.find("Seg")) ;//bitrate
+    //printf("%s", log.c_str());
+    ofstream out(log_path,ios::app);
+    out<<log<<endl;
+    out.close();
     //TODO
     //write string log into char *log_path
 }
@@ -180,6 +184,7 @@ void Proxy::run(){
     client_sockets.fill(0);
 
     cdn_socket = connect_CDN(serverIp, cdn_addr);
+    ofstream fileout(log_path,ios::trunc);
 
     Timer tmr;
     fd_set rfds;
@@ -239,8 +244,11 @@ void Proxy::run(){
 
                     valread = recv_http(cdn_socket, buffer);//recv from webServer
                     update_tp(valread, tmr.duration_ns()/1000000.0);
-                    if (is_seg)
+                    if (is_seg){
+                      //  ofstream fileout(log_path,ios::trunc);
+
                         write_to_logfile(inet_ntoa(address_client.sin_addr));
+                    }
                     send(client_socket, buffer, valread, 0);
                 }
             }
