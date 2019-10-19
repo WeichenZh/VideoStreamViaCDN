@@ -243,10 +243,9 @@ void Proxy::run(){
                     send(cdn_socket, buffer, strlen(buffer), 0);//valread will changed
 
                     valread = recv_http(cdn_socket, buffer);//recv from webServer
-                    update_tp(valread, tmr.duration_ns()/1000000.0);
                     if (is_seg){
                       //  ofstream fileout(log_path,ios::trunc);
-
+                        update_tp(valread, tmr.duration_ns()/1000000.0);
                         write_to_logfile(inet_ntoa(address_client.sin_addr));
                     }
                     send(client_socket, buffer, valread, 0);
