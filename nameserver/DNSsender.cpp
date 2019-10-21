@@ -96,21 +96,6 @@ int SendDndQueryPack(int *psockfd, ushort TransID, char *domainName, char *DNSad
     PDNSQuestion -> QTYPE = htons(0x1);
     PDNSQuestion -> QCLASS = htons(0x1); 
 
-    //Encoding Header+Question
-    BYTE *PDNSPackage = (BYTE *)malloc(sizeof(DNSHeader) + sizeof(DNSQuestion));
-    if (!PDNSPackage)
-    {
-    	free(QdomainName);
-    	free(PDNSHeader);
-    	free(PDNSQuestion);
-    	QdomainName = NULL;
-    	PDNSHeader = NULL;
-    	PDNSQuestion = NULL;
-    	error("Error:can not allocate memory for DNS package\n");
-    }
-    memset(PDNSPackage, 0, sizeof(DNSHeader)+sizeof(DNSQuestion));
-    memcpy(PDNSPackage, PDNSHeader, sizeof(DNSHeader));
-    memcpy(PDNSPackage+sizeof(DNSHeader), PDNSQuestion, sizeof(DNSQuestion));
 
     // prepare for sending
     sockaddr_in dnsServAddr;
@@ -122,9 +107,28 @@ int SendDndQueryPack(int *psockfd, ushort TransID, char *domainName, char *DNSad
     if (connect(*psockfd, (struct sockaddr *)&dnsServAddr,sizeof(dnsServAddr)) < 0)
         error("ERROR connecting");
 
+    int DNSHeader_size = htonl(sizeof(DNSHeader));
+    int DNSQuestion_size = htonl(sizeof(DNSQuestion));
+
+    // send size of DNS header
     int nSent = send(*psockfd,
-        (char*)PDNSPackage,
-        sizeof(DNSHeader) + sizeof(DNSQuestion),
+        (char*)&DNSHeader_size,
+        sizeof(DNSHeader_size),
+        0);
+
+    nSent = send(*psockfd,
+        (char *)PDNSHeader,
+        ntohl(DNSHeader_size),
+        0);
+
+    nSent = send(*psockfd, 
+        (char *)&DNSQuestion_size,
+        sizeof(DNSQuestion_size),
+        0);
+
+    nSent = send(*psockfd,
+        (char *)PDNSQuestion,
+        ntohl(DNSQuestion_size),
         0);
 
     if (nSent < 0)
@@ -132,13 +136,10 @@ int SendDndQueryPack(int *psockfd, ushort TransID, char *domainName, char *DNSad
         free(QdomainName);
         free(PDNSHeader);
         free(PDNSQuestion);
-        free(PDNSPackage);
         error("DNS package send fail!\n");
     }
 
 	// clean up the resources      
-    if(PDNSPackage)
-    	free(PDNSPackage); PDNSPackage=NULL;
     if(PDNSHeader)
     	free(PDNSHeader); PDNSHeader=NULL;
     if(PDNSQuestion)
@@ -158,30 +159,37 @@ int RecvDnsPack(int *psockfd, ushort TransID, char *pDomainAddr)
 	char buffer[MAXLINE] = {0};
 	sockaddr_in servAddr = {0};
     socklen_t len = sizeof(servAddr);
+    int n_recv = 0;
 
-    // int n_recv = recvfrom(*psockfd,
-    // 	buffer,
-    // 	MAXLINE,
-    // 	0,
-    // 	(sockaddr *)&servAddr,
-    // 	&len);
-    int n_recv = recv(*psockfd,
-        buffer,
-        MAXLINE,
+    memset(buffer, 0, MAXLINE);
+    // receive the size of header
+    int DNSHeader_size;
+    n_recv = recv(*psockfd,
+        (char *)buffer,
+        sizeof(DNSHeader_size),
         0);
-
     if (n_recv < 0)
     	error("Error reading from socket\n");
+    memcpy(&DNSHeader_size, buffer, sizeof(DNSHeader_size));
+    DNSHeader_size = ntohl(DNSHeader_size);
 
-    // Decoding Answer package
-    if (n_recv < sizeof(DNSHeader))
-    	error("Error: invalid package length\n");
+    if(DNSHeader_size<0)
+        error("Error: DNS header size must be greater than zero\n");
+
+     // receive DNS header
+    n_recv = recv(*psockfd,
+        (char *)buffer,
+        DNSHeader_size,
+        0);
+    if (n_recv < 0)
+        error("Error: reading from socket\n");
+
     // Decoding Answer Header
-    DNSHeader *pAHeader = (DNSHeader *)malloc(sizeof(DNSHeader));
+    DNSHeader *pAHeader = (DNSHeader *)malloc(DNSHeader_size);
     if (!pAHeader)
     	error("Error: no memory available for parsing Answer header\n");
-    memset(pAHeader, 0, sizeof(DNSHeader));
-    memcpy(pAHeader, buffer, sizeof(DNSHeader));
+    memset(pAHeader, 0, DNSHeader_size);
+    memcpy(pAHeader, buffer, DNSHeader_size);
 
     if (pAHeader->ID != htons(TransID))
     	{
@@ -205,16 +213,32 @@ int RecvDnsPack(int *psockfd, ushort TransID, char *pDomainAddr)
     		return 0;
     	}
     }
+
+    // receive DNS record size
+    int DNSRecord_size;
+    n_recv = recv(*psockfd,
+        (char *)buffer,
+        sizeof(DNSRecord_size),
+        0);
+    memcpy(&DNSRecord_size, buffer, sizeof(DNSRecord_size));
+    DNSRecord_size = ntohl(DNSRecord_size);
+
+    // receive DNS record
+    n_recv = recv(*psockfd,
+        buffer,
+        DNSRecord_size,
+        0);
+
     // Decoding Answer Record
-    DNSRecord *pARecord = (DNSRecord *)malloc(sizeof(DNSRecord));
+    DNSRecord *pARecord = (DNSRecord *)malloc(DNSRecord_size);
     if (!pARecord)
     {
     	free(pAHeader);
     	pAHeader = NULL;
     	error("Error: no memory available for parsing the Answer package Record\n");
     }
-    memset(pARecord, 0, sizeof(DNSRecord));
-    memcpy(pARecord, buffer+sizeof(DNSHeader), sizeof(DNSRecord));
+    memset(pARecord, 0, DNSRecord_size);
+    memcpy(pARecord, buffer, DNSRecord_size);
 
     if (pARecord -> TYPE != htons(0x1))
     {
@@ -240,31 +264,6 @@ int RecvDnsPack(int *psockfd, ushort TransID, char *pDomainAddr)
    	free(pARecord);
    	pAHeader = NULL;
    	pARecord = NULL;
-
-	return 0;
-}
-
-
-int main(int argc, char const *argv[])
-{
-	int sockfd;
-	ushort TransID = 1000;
-	ushort portno = 8080;
-	char DomainName[] = "video.cse.umich.edu";
-	char DNSIp[] = "10.0.0.3";
-	char DomainAddr[256] = {0};
-
-    // sockfd  = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    sockfd  = socket(AF_INET, SOCK_STREAM, 0);
-    if(sockfd < 0)
-		error("ERROR opening socket");
-	SendDndQueryPack(&sockfd, TransID, DomainName, DNSIp, portno);
-	RecvDnsPack(&sockfd, TransID, DomainAddr);
-
-    close(sockfd);
-
-	cout << "DomainAddr is: " << DomainAddr << endl;
-
 
 	return 0;
 }
