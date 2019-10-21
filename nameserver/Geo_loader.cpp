@@ -40,16 +40,13 @@ int Geo_loader(int argc, char const *argv[])
     log.open(log_path, ios::trunc);
     if(!log)
         error("Error: no log file!\n");
-    // ifstream records;
+    log.close();
 
-    // records.open(serversRecord);
-    // if(!records)
-    //     error("Error: DNS server doesn\'t have record file.\n");
-    // if (records.get() == EOF)
-    //     error("Error: DNS server doesn\'t have any records.\n");
-
-    // records.clear();
-    // records.seekg(0, ios::beg);
+    /* Decoding query package config */
+    const char *domainName = "video.cse.umich.edu";
+    char qDomainName[100] = {0};
+    char rData[100] = {0};
+    char rCode = 0;
 
     /**** socket part ****/
     int sockfd, n_recv, portno; 
@@ -65,6 +62,9 @@ int Geo_loader(int argc, char const *argv[])
         exit(EXIT_FAILURE); 
     } 
     
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(int)) < 0)
+        error("setsockopt(SO_REUSEADDR) failed");
+
     memset(&servaddr, 0, sizeof(servaddr)); 
     memset(&cliaddr, 0, sizeof(cliaddr)); 
       
@@ -82,58 +82,76 @@ int Geo_loader(int argc, char const *argv[])
         exit(EXIT_FAILURE); 
     } 
     listen(sockfd, 5);
-    for(int k=0;k<5;k++)
+    for(int k=0;;k++)
     {
         int newsockfd = accept(sockfd, (struct sockaddr *)&cliaddr, &len);
         if (newsockfd < 0)
             error("ERROR on accept");
 
-        n_recv = recv(newsockfd, (char *)buffer, MAXLINE,  0); 
+        //get client ip address
+        strcpy(srcIPaddr, inet_ntoa(cliaddr.sin_addr));
+        // receive size of DNS header
+        int DNSHeader_size;
+        n_recv = recv(newsockfd, (char *)buffer, sizeof(DNSHeader_size),  0); 
         if (n_recv<0)
             error("ERROR reading from socket");
 
-        // Decoding query package
-        BYTE *pQueryPackage = (BYTE *)buffer;
-        const char *domainName = "video.cse.umich.edu";
-        char qDomainName[100] = {0};
-        char rData[100] = {0};
-        char rCode = 0;
+        memcpy(&DNSHeader_size, (BYTE *)buffer, sizeof(DNSHeader_size));
+        DNSHeader_size = ntohl(DNSHeader_size);
+        // cout << "DNS HEADER SIZE: " << DNSHeader_size <<endl;
 
-        // Confirm that the received buffer size is larger than DNS header
-        if (n_recv <= sizeof(DNSHeader))
-            error("Error: the size of DNS package should be larger than header\n");
-
-        DNSHeader *pRecvHeader = (DNSHeader *)malloc(sizeof(DNSHeader));
+        // receive DNS header
+        memset(buffer, 0, MAXLINE);
+        n_recv = recv(newsockfd, (char *)buffer, DNSHeader_size, 0);
+        if (n_recv < 0)
+            error("ERROR reading from socket");
+        DNSHeader *pRecvHeader = (DNSHeader *)malloc(DNSHeader_size);
         if(!pRecvHeader)
             error("Error: no memory available for DNSHeader\n");
-
-        DNSQuestion *pRecvQuestion = (DNSQuestion *)malloc(sizeof(DNSQuestion));
-        if(!pRecvQuestion)
-        {
-            free(pRecvHeader);
-            pRecvHeader = NULL;
-            error("Error: no memory available for DNSQuestion\n");
-        }
-
-        memcpy(pRecvHeader, pQueryPackage, sizeof(DNSHeader));
-        memcpy(pRecvQuestion, pQueryPackage+sizeof(DNSHeader), sizeof(DNSQuestion));
+        memset(pRecvHeader, 0, DNSHeader_size);
+        memcpy(pRecvHeader, (BYTE *)buffer, DNSHeader_size);
 
         // Decoding Header
         //check the AA flag
         if(pRecvHeader->AA != 0x0)
         {
             free(pRecvHeader);
-            free(pRecvQuestion);
             pRecvHeader = NULL;
-            pRecvQuestion = NULL;
             error("Error: received package is not query package\n");
         }
-        //TransID = ntohs(pRecvHeader->ID);
 
         // Decoding question
         /******************************************************/
         /* TUDO: should I return error if QTYPE or QCLASS is not equal to 1? */
         /******************************************************/
+        
+        // receive DNS Question size
+        int DNSQuestion_size;
+        memset(buffer, 0, MAXLINE);
+        n_recv = recv(newsockfd, (char *)buffer, sizeof(DNSQuestion_size),  0); 
+        if (n_recv<0)
+            error("ERROR reading from socket");
+        memcpy(&DNSQuestion_size, (BYTE *)buffer, sizeof(DNSQuestion_size));
+        DNSQuestion_size = ntohl(DNSQuestion_size);
+        // cout << "DNS Question size: " << DNSQuestion_size << endl;
+        if (DNSQuestion_size < 0)
+            error("Error: DNS question size must be greater than 0\n");
+
+        // receive DNS Question
+        memset(buffer, 0, MAXLINE);
+        n_recv = recv(newsockfd, (char *)buffer, DNSQuestion_size, 0);
+        if (n_recv<0)
+            error("ERROR reading from socket");
+        
+        DNSQuestion *pRecvQuestion = (DNSQuestion *)malloc(DNSQuestion_size);
+        if(!pRecvQuestion)
+        {
+            free(pRecvHeader);
+            pRecvHeader = NULL;
+            error("Error: no memory available for DNSQuestion\n");
+        }
+        memset(pRecvQuestion, 0, DNSQuestion_size);
+        memcpy(pRecvQuestion, (BYTE *)buffer, DNSQuestion_size);
 
         // Convert 3www6google3com to www.google.com
         unsigned int pos = 0;
@@ -152,7 +170,6 @@ int Geo_loader(int argc, char const *argv[])
         if (!strcmp(qDomainName, domainName))
         {
             rCode = 0x0;
-            strcpy(srcIPaddr, inet_ntoa(cliaddr.sin_addr));
             nearest_server_addr(serversRecord, srcIPaddr, rData);
         }
         else
@@ -195,32 +212,38 @@ int Geo_loader(int argc, char const *argv[])
         pARecord->RDLENGTH = htons(sizeof(DNSHeader)+sizeof(DNSRecord));
         memcpy(pARecord->RDATA, rData, 100); 
 
-        // Encoding Answering package
-        BYTE *pApackage = (BYTE *)malloc(sizeof(DNSHeader) + sizeof(DNSRecord));
-        if (!pApackage)
-        {
-            free(pAHeader);
-            free(pARecord);
-            error("Error: no memory available for Answer package\n");
-        }
-        memset(pApackage, 0, sizeof(DNSHeader)+sizeof(DNSRecord));
-        memcpy(pApackage, pAHeader, sizeof(DNSHeader));
-        memcpy(pApackage+sizeof(DNSHeader), pARecord, sizeof(DNSRecord));
+        // send DNS packet
+        int DNSAHeader_size = htonl(sizeof(DNSHeader));
+        int DNSARecord_size = htonl(sizeof(DNSRecord));
+        int nSent = 0;
 
-        send(newsockfd, 
-            (const char *)pApackage,
-            sizeof(DNSHeader)+sizeof(DNSRecord),  
+        nSent = send(newsockfd,
+            (char *)&DNSAHeader_size,
+            sizeof(DNSAHeader_size),
+            0);
+        nSent = send(newsockfd, 
+            (char *)pAHeader,
+            ntohl(DNSAHeader_size),  
             0); 
+        nSent = send(newsockfd,
+            (char *)&DNSARecord_size,
+            sizeof(DNSARecord_size),
+            0);
+        nSent = send(newsockfd,
+            (char *)pARecord,
+            ntohl(DNSARecord_size),
+            0);
         
         // logging
+        log.open(log_path, ios::app);
         log << srcIPaddr << " " << qDomainName << " " << rData << "\n";
+        log.close();
 
         // clean the resource
         free(pRecvHeader);
         free(pRecvQuestion);
         free(pAHeader);
         free(pARecord);
-        free(pApackage);
         close(newsockfd);
     }
     close(sockfd);
