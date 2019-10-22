@@ -82,7 +82,7 @@ int Geo_loader(int argc, char const *argv[])
         exit(EXIT_FAILURE); 
     } 
     listen(sockfd, 5);
-    for(int k=0;;k++)
+    for(;;)
     {
         int newsockfd = accept(sockfd, (struct sockaddr *)&cliaddr, &len);
         if (newsockfd < 0)
@@ -286,12 +286,12 @@ int nearest_server_addr(const char *servers, char *query_ip, char *nearest_serve
     	// cout << record <<endl;
     	if(!strncasecmp(record.c_str(), "NUM_NODES", 9))
     	{
-    		nNodes = ushort(record.c_str()[11] - 48); 
+    		nNodes = ushort(atoi((char *)&record[11])); 
     	}
     	else if(!strncasecmp(record.c_str(), "NUM_LINKS", 9))
     	{
     		// cout << record <<endl;
-    		nLinks = ushort(record.c_str()[11] - 48);
+    		nLinks = ushort(atoi((char *)&record[11])); 
     	}
     	else
     	{
