@@ -335,8 +335,18 @@ int nearest_server_addr(const char *servers, char *query_ip, char *nearest_serve
 
 	dijkstra(IPtoID[object_ip], edge, dst, book, nNodes, nLinks);
 
-	int serverID = distance(dst, min_element(&dst[serverIDs[0]], &dst[serverIDs[0]]+num_server));
-	string serverIP = IDtoIP[serverID];
+	// int serverID = distance(dst, min_element(&dst[serverIDs[0]], &dst[serverIDs[0]]+num_server));
+    int min_dis = 100000;
+    int clst_serverID=-1;
+    for(int i=0;i<num_server;i++)
+    {
+        if(dst[serverIDs[i]] < min_dis)
+        {
+            min_dis = dst[serverIDs[i]];
+            clst_serverID = serverIDs[i];
+        }
+    }
+	string serverIP = IDtoIP[clst_serverID];
 	if (!serverIP.size())
 		cout << "Error: invalid address." <<endl;
     strcpy(nearest_server, serverIP.c_str());
