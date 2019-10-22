@@ -336,7 +336,7 @@ int nearest_server_addr(const char *servers, char *query_ip, char *nearest_serve
 	dijkstra(IPtoID[object_ip], edge, dst, book, nNodes, nLinks);
 
 	// int serverID = distance(dst, min_element(&dst[serverIDs[0]], &dst[serverIDs[0]]+num_server));
-    int min_dis = 100000;
+    int min_dis = 1000000;
     int clst_serverID=-1;
     for(int i=0;i<num_server;i++)
     {
