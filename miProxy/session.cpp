@@ -66,7 +66,6 @@ Proxy::Proxy(int lp, char const *ho, double ap, char const *lg){
     strcpy(serverIp, ho);
     alpha    = ap;
     strcpy(log_path, lg);
-    //print();
 }
 
 int connect_CDN(char const *host, char *cdn_addr)
@@ -125,18 +124,17 @@ void Proxy::write_to_logfile(char const* browser_ip){
     log += sep + to_string(tp_curr);//tput
     log += sep + to_string(tp_estimated);//avg-tput
     log += sep + strBuff.substr(0, strBuff.find("Seg")) ;//bitrate
-    //printf("%s", log.c_str());
     ofstream out(log_path,ios::app);
     out<<log<<endl;
     out.close();
-    //TODO
-    //write string log into char *log_path
 }
 
 void Proxy::update_tp(int numbits, double duration_ms){
-    duration_curr = duration_ms/2;
+    //numbits: # of bits(not Bite)
+    //duration_ms: RTT in ms
+    duration_curr = duration_ms/2;//one-way delay(ms)
     tp_curr = numbits/duration_curr;//Kbps
-    tp_estimated = (tp_estimated<0)? tp_curr: (alpha*tp_curr+(1-alpha)*tp_estimated);
+    tp_estimated = (tp_estimated<0)? tp_curr: (alpha*tp_curr+(1-alpha)*tp_estimated);//exponential update
 }
 
 void Proxy::rearrange_GET(){
