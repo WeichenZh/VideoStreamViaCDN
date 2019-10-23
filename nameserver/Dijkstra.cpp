@@ -2,7 +2,7 @@
 
 #define INF 65535
 
-int dijkstra(int srcpID, int (*e)[20], int *dis, int *book, int nNodes, int nLinks){
+int dijkstra(int srcpID, float (*e)[20], float *dis, int *book, int nNodes, int nLinks){
 	int min, i, j, v, u;
 	int n = nNodes;
 	int m = nLinks;
