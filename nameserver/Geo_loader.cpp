@@ -106,8 +106,8 @@ int Geo_loader(int argc, char const *argv[])
         if (n_recv < 0)
             error("ERROR reading from socket");
         DNSHeader *pRecvHeader = (DNSHeader *)malloc(DNSHeader_size);
-        if(!pRecvHeader)
-            error("Error: no memory available for DNSHeader\n");
+//         if(!pRecvHeader)
+//             error("Error: no memory available for DNSHeader\n");
         memset(pRecvHeader, 0, DNSHeader_size);
         memcpy(pRecvHeader, (BYTE *)buffer, DNSHeader_size);
 
@@ -144,12 +144,12 @@ int Geo_loader(int argc, char const *argv[])
             error("ERROR reading from socket");
         
         DNSQuestion *pRecvQuestion = (DNSQuestion *)malloc(DNSQuestion_size);
-        if(!pRecvQuestion)
-        {
-            free(pRecvHeader);
-            pRecvHeader = NULL;
-            error("Error: no memory available for DNSQuestion\n");
-        }
+//         if(!pRecvQuestion)
+//         {
+//             free(pRecvHeader);
+//             pRecvHeader = NULL;
+//             error("Error: no memory available for DNSQuestion\n");
+//         }
         memset(pRecvQuestion, 0, DNSQuestion_size);
         memcpy(pRecvQuestion, (BYTE *)buffer, DNSQuestion_size);
 
@@ -181,8 +181,8 @@ int Geo_loader(int argc, char const *argv[])
         // Encoding Answer package
         // Encoding package Header
         DNSHeader *pAHeader = (DNSHeader *)malloc(sizeof(DNSHeader));
-        if (!pAHeader)
-            error("Error: no memory available for Answer package header\n");
+//         if (!pAHeader)
+//             error("Error: no memory available for Answer package header\n");
         memset(pAHeader, 0, sizeof(DNSHeader));
         pAHeader->ID = pRecvHeader->ID;  // ID
         pAHeader->QR = 0x0;
@@ -198,12 +198,12 @@ int Geo_loader(int argc, char const *argv[])
 
         // Encoding package record
         DNSRecord *pARecord = (DNSRecord *)malloc(sizeof(DNSRecord));
-        if (!pARecord)
-        {
-            free(pAHeader);
-            pAHeader=NULL;
-            error("Error: no memory available for Answer package record\n");
-        }
+//         if (!pARecord)
+//         {
+//             free(pAHeader);
+//             pAHeader=NULL;
+//             error("Error: no memory available for Answer package record\n");
+//         }
         memset(pARecord, 0, sizeof(DNSRecord));
         memcpy(pARecord->NAME, pRecvQuestion->QNAME, 100);
         pARecord->TYPE = htons(0x1);
