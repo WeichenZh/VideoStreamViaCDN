@@ -1,7 +1,8 @@
-# include <stdio.h>
-# include <string.h>
 # include <iostream>
 # include <fstream>
+
+# include <stdio.h>
+# include <string.h>
 # include <stdlib.h>
 # include <stdint.h>
 # include <sys/types.h>
@@ -10,9 +11,10 @@
 # include <arpa/inet.h>
 # include <netdb.h>
 # include <unistd.h>
-# include "DNSHeader.h"
-# include "DNSQuestion.h"
-# include "DNSRecord.h"
+
+# include "../starter_files/DNSHeader.h"
+# include "../starter_files/DNSQuestion.h"
+# include "../starter_files/DNSRecord.h"
 # include "error_msg.h"
 
 #define MAXLINE 512 
@@ -46,6 +48,10 @@ int RR_loader(int argc, char const *argv[])
     char qDomainName[100] = {0};
     char rData[100] = {0};
     char rCode = 0;
+    DNSHeader queryHeader;
+    DNSQuestion queryQuestion;
+    DNSHeader answerHeader;
+    DNSRecord answerRecord;
 
     /**** socket part ****/
     int sockfd, n_recv, portno;
@@ -80,7 +86,7 @@ int RR_loader(int argc, char const *argv[])
         exit(EXIT_FAILURE); 
     } 
     listen(sockfd, 5);
-    for (int k=0;;k++)
+    for (;;)
     {
         int newsockfd = accept(sockfd, (struct sockaddr *)&cliaddr, &len);
         if (newsockfd < 0)
@@ -101,32 +107,27 @@ int RR_loader(int argc, char const *argv[])
         if (DNSHeader_size <= 0)
             error("Error: DNSHeader size must be greater than 0.\n");
 
+        cout << sizeof(queryHeader) << endl;
+
         // get DNS header
         memset(buffer, 0, MAXLINE);
         n_recv = recv(newsockfd, 
             (char *)buffer, 
             DNSHeader_size, 
             0);
-        DNSHeader *pRecvHeader = (DNSHeader *)malloc(DNSHeader_size);
-        if(!pRecvHeader)
-            error("Error: no memory available for DNSHeader\n");
-        memset(pRecvHeader, 0, DNSHeader_size);
-        memcpy(pRecvHeader, buffer, DNSHeader_size);
+        queryHeader = DNSHeader::decode(string(buffer));
 
         // Decoding Header
         //check the AA flag
-//         if(pRecvHeader->AA != 0x0)
-//         {
-//             free(pRecvHeader);
-//             pRecvHeader = NULL;
-//             error("Error: received package is not query package\n");
-//         }
+        if(queryHeader.AA != 0x0)
+        {
+            error("Error: received package is not query package\n");
+        }
 
         // Decoding question
         /******************************************************/
         /* TUDO: should I return error if QTYPE or QCLASS is not equal to 1? */
         /******************************************************/
-
 
         // get DNS question size
         int DNSQuestion_size;
@@ -142,6 +143,8 @@ int RR_loader(int argc, char const *argv[])
         if (DNSQuestion_size < 0)
             error("Error: DNS question size must be greater than 0.\n");
 
+        cout << "DNSQuestion_size :" << DNSQuestion_size <<endl;
+
         // get DNS question
         memset(buffer, 0, MAXLINE);
         n_recv = recv(newsockfd,
@@ -150,32 +153,11 @@ int RR_loader(int argc, char const *argv[])
             0);
         if (n_recv<0)
             error("ERROR reading from socket");
+        queryQuestion = DNSQuestion::decode(string(buffer));
 
-        DNSQuestion *pRecvQuestion = (DNSQuestion *)malloc(DNSQuestion_size);
-        if(!pRecvQuestion)
-        {
-            free(pRecvHeader);
-            pRecvHeader = NULL;
-            error("Error: no memory available for DNSQuestion\n");
-        }
-        memset(pRecvQuestion, 0, DNSQuestion_size);
-        memcpy(pRecvQuestion, (BYTE *)buffer, DNSQuestion_size);
-
-        // Convert 3www6google3com to www.google.com
-        unsigned int pos = 0;
-        unsigned int seg_len = 0;
-        for (;seg_len = pRecvQuestion->QNAME[pos];)
-        {
-            memcpy(qDomainName+pos, pRecvQuestion->QNAME+pos+1, seg_len);
-            qDomainName[pos+seg_len] = '.';
-            pos += seg_len +1;
-        }
-        if (qDomainName[pos-1]=='.')
-            qDomainName[pos-1] = 0;
-        // cout << "qDomainName = " << qDomainName << endl;
 
         // Seach for corresponding ip address
-        if (!strcmp(qDomainName, domainName))
+        if (!strcmp(queryQuestion.QNAME, domainName))
         {
             rCode = 0x0;
             string record;
@@ -195,70 +177,63 @@ int RR_loader(int argc, char const *argv[])
 
         // Encoding Answer package
         // Encoding package Header
-        DNSHeader *pAHeader = (DNSHeader *)malloc(sizeof(DNSHeader));
-        if (!pAHeader)
-            error("Error: no memory available for Answer package header\n");
-        memset(pAHeader, 0, sizeof(DNSHeader));
-        pAHeader->ID = pRecvHeader->ID;  // ID
-        pAHeader->QR = 0x0;
-        pAHeader->AA = 0x1;
-        pAHeader->RA = 0x0;
-        pAHeader->RD = 0x0;
-        pAHeader->Z = 0x0;  
-        pAHeader->QDCOUNT = htons(0x1);  //I set it to 1 because so far I just assume that only 1 
-                                                                            //domain name will be asked per DNS package.
-        pAHeader->ANCOUNT = htons(0x1);
-        pAHeader->NSCOUNT = htons(0x0);
-        pAHeader->ARCOUNT = htons(0X0);
+        memset(&answerHeader,0, sizeof(answerHeader));
+        answerHeader.ID = queryHeader.ID;  // ID
+        answerHeader.QR = 0x0;
+        answerHeader.AA = 0x1;
+        answerHeader.RA = 0x0;
+        answerHeader.RD = 0x0;
+        answerHeader.Z = 0x0;  
+        answerHeader.QDCOUNT = htons(0x1);                                                                       //domain name will be asked per DNS package.
+        answerHeader.ANCOUNT = htons(0x1);
+        answerHeader.NSCOUNT = htons(0x0);
+        answerHeader.ARCOUNT = htons(0X0);
 
         // Encoding package record
-        DNSRecord *pARecord = (DNSRecord *)malloc(sizeof(DNSRecord));
-        if (!pARecord)
-        {
-            free(pAHeader);
-            pAHeader=NULL;
-            error("Error: no memory available for Answer package record\n");
-        }
-        memset(pARecord, 0, sizeof(DNSRecord));
-        memcpy(pARecord->NAME, pRecvQuestion->QNAME, 100);
-        pARecord->TYPE = htons(0x1);
-        pARecord->CLASS = htons(0x1);
-        pARecord->TTL = htons(0x0);
-        pARecord->RDLENGTH = htons(sizeof(DNSHeader)+sizeof(DNSRecord));
-        memcpy(pARecord->RDATA, rData, 100); 
+        memset(&answerRecord, 0, sizeof(answerRecord));
+        memcpy(answerRecord.NAME, queryQuestion.QNAME, 100);
+        answerRecord.TYPE = htons(0x1);
+        answerRecord.CLASS = htons(0x1);
+        answerRecord.TTL = htons(0x0);
+        answerRecord.RDLENGTH = htons(sizeof(answerHeader)+sizeof(answerRecord));
+        memcpy(answerRecord.RDATA, rData, 100); 
 
         // send DNS packet
-        int DNSAHeader_size = htonl(sizeof(DNSHeader));
-        int DNSARecord_size = htonl(sizeof(DNSRecord));
+        string sAnswerHeader = DNSHeader::encode(answerHeader);
+        string sAnswerRecord = DNSRecord::encode(answerRecord);
+        int DNSAHeader_size = htonl(sAnswerHeader.length());
+        int DNSARecord_size = htonl(sAnswerRecord.length());
         int nSent = 0;
+
+        cout << ntohl(DNSAHeader_size) << " " << ntohl(DNSARecord_size)<<endl;   
 
         nSent = send(newsockfd,
             (char *)&DNSAHeader_size,
             sizeof(DNSAHeader_size),
             0);
+        memset(buffer, 0, MAXLINE);
+        memcpy(buffer, sAnswerHeader.c_str(), ntohl(DNSAHeader_size));
         nSent = send(newsockfd, 
-            (char *)pAHeader,
+            (char *)buffer,
             ntohl(DNSAHeader_size),  
             0); 
+
         nSent = send(newsockfd,
             (char *)&DNSARecord_size,
             sizeof(DNSARecord_size),
             0);
+        memset(buffer, 0, MAXLINE);
+        memcpy(buffer, sAnswerRecord.c_str(), ntohl(DNSARecord_size));
         nSent = send(newsockfd,
-            (char *)pARecord,
+            (char *)buffer,
             ntohl(DNSARecord_size),
             0);
-
+        cout << nSent << endl;
         // logging
         log.open(log_path, ios::app);
         log << srcIPaddr << " " << qDomainName << " " << rData << "\n";
         log.close();
-
-        // clean the resource
-        free(pRecvHeader);
-        free(pRecvQuestion);
-        free(pAHeader);
-        free(pARecord);
+        
         close(newsockfd);
     }
     records.close();

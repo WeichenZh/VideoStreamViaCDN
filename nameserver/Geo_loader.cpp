@@ -14,10 +14,11 @@
 # include <fstream>
 # include <algorithm>
 # include <vector>
+# include <typeinfo>
 
-# include "DNSHeader.h"
-# include "DNSQuestion.h"
-# include "DNSRecord.h"
+# include "../starter_files/DNSHeader.h"
+# include "../starter_files/DNSQuestion.h"
+# include "../starter_files/DNSRecord.h"
 # include "Dijkstra.h"
 # include "Geo_loader.h"
 # include "error_msg.h"
@@ -38,8 +39,8 @@ int Geo_loader(int argc, char const *argv[])
 
     ofstream log;
     log.open(log_path, ios::trunc);
-    if(!log)
-        error("Error: no log file!\n");
+    // if(!log)
+    //     error("Error: no log file!\n");
     log.close();
 
     /* Decoding query package config */
@@ -47,6 +48,10 @@ int Geo_loader(int argc, char const *argv[])
     char qDomainName[100] = {0};
     char rData[100] = {0};
     char rCode = 0;
+    DNSHeader queryHeader;
+    DNSQuestion queryQuestion;
+    DNSHeader answerHeader;
+    DNSRecord answerRecord;
 
     /**** socket part ****/
     int sockfd, n_recv, portno; 
@@ -98,27 +103,21 @@ int Geo_loader(int argc, char const *argv[])
 
         memcpy(&DNSHeader_size, (BYTE *)buffer, sizeof(DNSHeader_size));
         DNSHeader_size = ntohl(DNSHeader_size);
-        // cout << "DNS HEADER SIZE: " << DNSHeader_size <<endl;
+
 
         // receive DNS header
         memset(buffer, 0, MAXLINE);
         n_recv = recv(newsockfd, (char *)buffer, DNSHeader_size, 0);
         if (n_recv < 0)
             error("ERROR reading from socket");
-        DNSHeader *pRecvHeader = (DNSHeader *)malloc(DNSHeader_size);
-//         if(!pRecvHeader)
-//             error("Error: no memory available for DNSHeader\n");
-        memset(pRecvHeader, 0, DNSHeader_size);
-        memcpy(pRecvHeader, (BYTE *)buffer, DNSHeader_size);
+        queryHeader = DNSHeader::decode(string(buffer));
 
         // Decoding Header
-        //check the AA flag
-//         if(pRecvHeader->AA != 0x0)
-//         {
-//             free(pRecvHeader);
-//             pRecvHeader = NULL;
-//             error("Error: received package is not query package\n");
-//         }
+        // check the AA flag
+        if(queryHeader.AA != 0x0)
+        {
+            error("Error: received package is not query package\n");
+        }
 
         // Decoding question
         /******************************************************/
@@ -142,32 +141,10 @@ int Geo_loader(int argc, char const *argv[])
         n_recv = recv(newsockfd, (char *)buffer, DNSQuestion_size, 0);
         if (n_recv<0)
             error("ERROR reading from socket");
-        
-        DNSQuestion *pRecvQuestion = (DNSQuestion *)malloc(DNSQuestion_size);
-//         if(!pRecvQuestion)
-//         {
-//             free(pRecvHeader);
-//             pRecvHeader = NULL;
-//             error("Error: no memory available for DNSQuestion\n");
-//         }
-        memset(pRecvQuestion, 0, DNSQuestion_size);
-        memcpy(pRecvQuestion, (BYTE *)buffer, DNSQuestion_size);
-
-        // Convert 3www6google3com to www.google.com
-        unsigned int pos = 0;
-        unsigned int seg_len = 0;
-        for (;seg_len = pRecvQuestion->QNAME[pos];)
-        {
-            memcpy(qDomainName+pos, pRecvQuestion->QNAME+pos+1, seg_len);
-            qDomainName[pos+seg_len] = '.';
-            pos += seg_len +1;
-        }
-        if (qDomainName[pos-1]=='.')
-            qDomainName[pos-1] = 0;
-        //cout << "qDomainName = " << qDomainName << endl;
+        queryQuestion = DNSQuestion::decode(string(buffer));
 
         // Seach for corresponding ip address
-        if (!strcmp(qDomainName, domainName))
+        if (!strcmp(queryQuestion.QNAME, domainName))
         {
             rCode = 0x0;
             nearest_server_addr(serversRecord, srcIPaddr, rData);
@@ -180,57 +157,53 @@ int Geo_loader(int argc, char const *argv[])
 
         // Encoding Answer package
         // Encoding package Header
-        DNSHeader *pAHeader = (DNSHeader *)malloc(sizeof(DNSHeader));
-//         if (!pAHeader)
-//             error("Error: no memory available for Answer package header\n");
-        memset(pAHeader, 0, sizeof(DNSHeader));
-        pAHeader->ID = pRecvHeader->ID;  // ID
-        pAHeader->QR = 0x0;
-        pAHeader->AA = 0x1;
-        pAHeader->RA = 0x0;
-        pAHeader->RD = 0x0;
-        pAHeader->Z = 0x0;  
-        pAHeader->QDCOUNT = htons(0x1);  //I set it to 1 because so far I just assume that only 1 
-                                                                            //domain name will be asked per DNS package.
-        pAHeader->ANCOUNT = htons(0x1);
-        pAHeader->NSCOUNT = htons(0x0);
-        pAHeader->ARCOUNT = htons(0X0);
+        memset(&answerHeader, 0, sizeof(answerHeader));
+        answerHeader.ID = queryHeader.ID;  // ID
+        answerHeader.QR = 0x0;
+        answerHeader.AA = 0x1;
+        answerHeader.RA = 0x0;
+        answerHeader.RD = 0x0;
+        answerHeader.Z = 0x0;  
+        answerHeader.QDCOUNT = htons(0x1);  //I set it to 1 because so far I just assume that only 1                                                                //domain name will be asked per DNS package.
+        answerHeader.ANCOUNT = htons(0x1);
+        answerHeader.NSCOUNT = htons(0x0);
+        answerHeader.ARCOUNT = htons(0X0);
 
         // Encoding package record
-        DNSRecord *pARecord = (DNSRecord *)malloc(sizeof(DNSRecord));
-//         if (!pARecord)
-//         {
-//             free(pAHeader);
-//             pAHeader=NULL;
-//             error("Error: no memory available for Answer package record\n");
-//         }
-        memset(pARecord, 0, sizeof(DNSRecord));
-        memcpy(pARecord->NAME, pRecvQuestion->QNAME, 100);
-        pARecord->TYPE = htons(0x1);
-        pARecord->CLASS = htons(0x1);
-        pARecord->TTL = htons(0x0);
-        pARecord->RDLENGTH = htons(sizeof(DNSHeader)+sizeof(DNSRecord));
-        memcpy(pARecord->RDATA, rData, 100); 
+        memset(&answerRecord, 0, sizeof(answerRecord));
+        memcpy(answerRecord.NAME, queryQuestion.QNAME, 100);
+        answerRecord.TYPE = htons(0x1);
+        answerRecord.CLASS = htons(0x1);
+        answerRecord.TTL = htons(0x0);
+        answerRecord.RDLENGTH = htons(sizeof(answerHeader)+sizeof(answerRecord));
+        memcpy(answerRecord.RDATA, rData, 100); 
 
         // send DNS packet
-        int DNSAHeader_size = htonl(sizeof(DNSHeader));
-        int DNSARecord_size = htonl(sizeof(DNSRecord));
+        string sAnswerHeader = DNSHeader::encode(answerHeader);
+        string sAnswerRecord = DNSRecord::encode(answerRecord);
+        int DNSAHeader_size = htonl(sAnswerHeader.length());
+        int DNSARecord_size = htonl(sAnswerRecord.length());
         int nSent = 0;
 
         nSent = send(newsockfd,
             (char *)&DNSAHeader_size,
             sizeof(DNSAHeader_size),
             0);
+        memset(buffer, 0, MAXLINE);
+        memcpy(buffer, sAnswerHeader.c_str(), ntohl(DNSAHeader_size));
         nSent = send(newsockfd, 
-            (char *)pAHeader,
+            (char *)buffer,
             ntohl(DNSAHeader_size),  
             0); 
+
         nSent = send(newsockfd,
             (char *)&DNSARecord_size,
             sizeof(DNSARecord_size),
             0);
+        memset(buffer, 0, MAXLINE);
+        memcpy(buffer, sAnswerRecord.c_str(), ntohl(DNSARecord_size));
         nSent = send(newsockfd,
-            (char *)pARecord,
+            (char *)buffer,
             ntohl(DNSARecord_size),
             0);
         
@@ -239,11 +212,6 @@ int Geo_loader(int argc, char const *argv[])
         log << srcIPaddr << " " << qDomainName << " " << rData << "\n";
         log.close();
 
-        // clean the resource
-        free(pRecvHeader);
-        free(pRecvQuestion);
-        free(pAHeader);
-        free(pARecord);
         close(newsockfd);
     }
     close(sockfd);
@@ -328,15 +296,32 @@ int nearest_server_addr(const char *servers, char *query_ip, char *nearest_serve
     		{
 
     			edge[atoi(parse_str[0])][atoi(parse_str[1])] = atof(parse_str[2]);
-    			edge[atoi(parse_str[1])][atoi(parse_str[0])] = atof(parse_str[2]) ;
-    		}
+    			edge[atoi(parse_str[1])][atoi(parse_str[0])] = atof(parse_str[2]);
+            }
     	}
     }
 
 	dijkstra(IPtoID[object_ip], edge, dst, book, nNodes, nLinks);
 
 	// int serverID = distance(dst, min_element(&dst[serverIDs[0]], &dst[serverIDs[0]]+num_server));
-    float min_dis = 1000000.0;
+    // // print out the result of records
+    // cout << endl;
+    // cout << typeid(serverIDs[0]).name() << endl;
+    // cout << " distance: ";
+    // for (int i =0;i<num_server;i++)
+    //     cout << dst[serverIDs[i]] << " ";
+    // cout << endl;
+    // cout << " serverID: ";
+    // for (int i=0;i<num_server;i++)
+    //     cout << serverIDs[i] << " ";
+    // cout << endl;
+    // cout << " client ID: ";
+    // for (int i=0;i <num_client; i++)
+    //     cout << clientIDs[i] << " ";
+    // cout << endl;
+
+    // find the closest server IP
+    float min_dis = 100000.0;
     int clst_serverID=-1;
     for(int i=0;i<num_server;i++)
     {
@@ -346,6 +331,8 @@ int nearest_server_addr(const char *servers, char *query_ip, char *nearest_serve
             clst_serverID = serverIDs[i];
         }
     }
+    // cout << " closest server ID: ";
+    // cout << clst_serverID << endl;
 	string serverIP = IDtoIP[clst_serverID];
 	if (!serverIP.size())
 		cout << "Error: invalid address." <<endl;
