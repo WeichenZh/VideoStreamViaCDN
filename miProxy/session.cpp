@@ -120,7 +120,7 @@ void Proxy::write_to_logfile(char const* browser_ip){
     string log(browser_ip), sep(" "), strBuff(chunk_name);//browser-ip
     log += sep + strBuff;//chunkname
     log += sep + cdn_addr;//server-ip
-    log += sep + to_string(duration_curr);//duration
+    log += sep + to_string(duration_curr/1000.0);//duration_curr
     log += sep + to_string(tp_curr);//tput
     log += sep + to_string(tp_estimated);//avg-tput
     log += sep + strBuff.substr(0, strBuff.find("Seg")) ;//bitrate
@@ -132,7 +132,7 @@ void Proxy::write_to_logfile(char const* browser_ip){
 void Proxy::update_tp(int numbits, double duration_ms){
     //numbits: # of bits(not Bite)
     //duration_ms: RTT in ms
-    duration_curr = duration_ms/2;//one-way delay(ms)
+    duration_curr = duration_ms;///2;//one-way delay(ms)
     tp_curr = numbits/duration_curr;//Kbps
     tp_estimated = (tp_estimated<0)? tp_curr: (alpha*tp_curr+(1-alpha)*tp_estimated);//exponential update
 }
@@ -143,7 +143,7 @@ void Proxy::rearrange_GET(){
     if (find_Seg != NULL){
         strncpy(chrBuff, buffer, 9);//GET
         int max_idx;
-        for (int i = 1; i < 4; ++i){
+        for (int i = 1; i < tps.size(); ++i){
             max_idx = i;
             if (tp_estimated < (tps[i]*1.5)){
                 max_idx -= 1;
@@ -159,6 +159,7 @@ void Proxy::rearrange_GET(){
         while (chunk_buff[pos_seg]!='/') pos_seg -= 1;
         chunk_buff = chunk_buff.substr(pos_seg+1, chunk_buff.find("HTTP")-pos_seg-2);
         strcpy(chunk_name, chunk_buff.c_str());
+        //printf("%.3f|%d|%s\n", tp_estimated/1.5, tps[max_idx], chunk_name);
     }
     else if (strstr(buffer,".f4m") != NULL){
         find_Seg = strstr(buffer,".f4m");
@@ -215,6 +216,7 @@ void Proxy::run(){
                 getpeername(client_socket, (struct sockaddr *)&address_client, 
                             (socklen_t*)&addrlen);
                 valread = recv_http(client_socket, buffer);
+                tmr.restart();
                 if (client_socket==cdn_socket) printf("Received Message FROM cdn_socket\n");
                 
                 if (valread == 0){//end
@@ -227,7 +229,7 @@ void Proxy::run(){
                 else{
                     bool is_seg = (strstr(buffer,"Seg") != NULL);
 
-                    if (strstr(buffer,".f4m") != NULL){
+                    if ((strstr(buffer,".f4m") != NULL) && (tps.size() == 0)){
                         char chrBuff[BUFFERSIZESMALL]={0};
                         strcpy(chrBuff, buffer);
                         send(cdn_socket, buffer, strlen(buffer), 0);
@@ -237,13 +239,14 @@ void Proxy::run(){
                     }
 
                     rearrange_GET();
-                    tmr.restart();
                     send(cdn_socket, buffer, strlen(buffer), 0);//valread will changed
 
                     valread = recv_http(cdn_socket, buffer);//recv from webServer
+
                     if (is_seg){
                       //  ofstream fileout(log_path,ios::trunc);
                         update_tp(valread*8, tmr.duration_ns()/1000000.0);//Bite to bit
+                        //printf("size: %d b, t: %.3f ms, tp: %.3f Kbps, tpc: %.3f Kbps, tps_sz: %d\n", valread*8, duration_curr, valread*8/duration_curr, tp_curr, 0);
                         write_to_logfile(inet_ntoa(address_client.sin_addr));
                     }
                     send(client_socket, buffer, valread, 0);
