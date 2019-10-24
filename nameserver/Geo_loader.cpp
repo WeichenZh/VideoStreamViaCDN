@@ -113,12 +113,12 @@ int Geo_loader(int argc, char const *argv[])
 
         // Decoding Header
         //check the AA flag
-        if(pRecvHeader->AA != 0x0)
-        {
-            free(pRecvHeader);
-            pRecvHeader = NULL;
-            error("Error: received package is not query package\n");
-        }
+//         if(pRecvHeader->AA != 0x0)
+//         {
+//             free(pRecvHeader);
+//             pRecvHeader = NULL;
+//             error("Error: received package is not query package\n");
+//         }
 
         // Decoding question
         /******************************************************/
