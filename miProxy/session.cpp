@@ -16,7 +16,6 @@
 #include <array>
 #include <map>
 #include <algorithm>
-#
 //parameters
 #define MAXCLIENT 100
 #define MAXURL 128
@@ -24,6 +23,30 @@
 //#define BUFFERSIZE 65536
 
 using namespace std;
+
+class Client
+{
+public:
+    double tp_estimated;
+    vector<int> tps;
+    int id;
+    Client(int idx){
+        id = idx;
+        tp_estimated=-1.0;
+    }
+    int get_tp(){
+        if (tps.size()==0) return 0;
+        int max_idx;
+        for (int i = 1; i < tps.size(); ++i){
+            max_idx = i;
+            if (tp_estimated < (tps[i]*1.5)){
+                max_idx -= 1;
+                break;
+            }
+        }
+        return tps[max_idx];
+    }
+};
 
 int err(char const *error){
     printf("Error: %s\n", error);
@@ -179,8 +202,8 @@ void Proxy::run(){
     struct sockaddr_in address_server, address_client; 
     master_socket = get_master_socket(&address_server, port);
     int addrlen = sizeof(address_server), valread;
-    array<int,MAXCLIENT> client_sockets;
-    client_sockets.fill(0);
+    array<Client*,MAXCLIENT> client_sockets;
+    client_sockets.fill(NULL);
 
     cdn_socket = connect_CDN(serverIp, cdn_addr);
     ofstream fileout(log_path,ios::trunc);
@@ -191,7 +214,7 @@ void Proxy::run(){
         FD_ZERO(&rfds);
         FD_SET(master_socket, &rfds);
         for (auto& client_socket: client_sockets){
-            if (client_socket != 0) FD_SET(client_socket, &rfds);
+            if (client_socket != NULL) FD_SET(client_socket->id, &rfds);
         }
 
         if (select(FD_SETSIZE, &rfds, NULL, NULL, NULL) < 0) err("select error");
@@ -205,13 +228,15 @@ void Proxy::run(){
             //printf("Socket fd is %d, IP is: %s, port: %d\n", 
             //       new_socket, inet_ntoa(address_client.sin_addr), ntohs(address_client.sin_port));
             for (auto& client_socket: client_sockets){
-                if (client_socket==0){
-                    client_socket = new_socket;
+                if (client_socket==NULL){
+                    client_socket = new Client(new_socket);
                     break;
                 }
             }
         }
-        for (auto& client_socket: client_sockets){
+        for (auto& client: client_sockets){
+            if (client == NULL) continue;
+            int client_socket = client->id;
             if (client_socket!=0 && FD_ISSET(client_socket, &rfds)){
                 getpeername(client_socket, (struct sockaddr *)&address_client, 
                             (socklen_t*)&addrlen);
@@ -220,13 +245,12 @@ void Proxy::run(){
                 if (client_socket==cdn_socket) printf("Received Message FROM cdn_socket\n");
                 
                 if (valread == 0){//end
-                    //printf("\n---Host disconnected---\n");
-                    //printf("IP: %s, port: %d\n",
-                    //       inet_ntoa(address_client.sin_addr), ntohs(address_client.sin_port));
                     close(client_socket);
-                    client_socket = 0;
+                    delete client;
+                    client = NULL;
                 }
                 else{
+                    tp_estimated = client->tp_estimated;
                     bool is_seg = (strstr(buffer,"Seg") != NULL);
 
                     if ((strstr(buffer,".f4m") != NULL) && (tps.size() == 0)){
@@ -250,6 +274,7 @@ void Proxy::run(){
                         write_to_logfile(inet_ntoa(address_client.sin_addr));
                     }
                     send(client_socket, buffer, valread, 0);
+                    client->tp_estimated = tp_estimated;
                 }
             }
         }
