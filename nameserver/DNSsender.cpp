@@ -184,26 +184,26 @@ int RecvDnsPack(int *psockfd, ushort TransID, char *pDomainAddr)
 }
 
 
-int main(int argc, char const *argv[])
-{
-	int sockfd;
-	ushort TransID = 16;
-	ushort portno = 8080;
-	char DomainName[] = "video.cse.umich.edu";
-	char DNSIp[] = "10.0.0.3";
-	char DomainAddr[256] = {0};
+// int main(int argc, char const *argv[])
+// {
+// 	int sockfd;
+// 	ushort TransID = 16;
+// 	ushort portno = 8080;
+// 	char DomainName[] = "video.cse.umich.edu";
+// 	char DNSIp[] = "10.0.0.3";
+// 	char DomainAddr[256] = {0};
 
-    // sockfd  = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    sockfd  = socket(AF_INET, SOCK_STREAM, 0);
-    if(sockfd < 0)
-		error("ERROR opening socket");
-	SendDndQueryPack(&sockfd, TransID, DomainName, DNSIp, portno);
-	RecvDnsPack(&sockfd, TransID, DomainAddr);
+//     // sockfd  = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+//     sockfd  = socket(AF_INET, SOCK_STREAM, 0);
+//     if(sockfd < 0)
+// 		error("ERROR opening socket");
+// 	SendDndQueryPack(&sockfd, TransID, DomainName, DNSIp, portno);
+// 	RecvDnsPack(&sockfd, TransID, DomainAddr);
 
-    close(sockfd);
+//     close(sockfd);
 
-	cout << "DomainAddr is: " << DomainAddr << endl;
+// 	cout << "DomainAddr is: " << DomainAddr << endl;
 
 
-	return 0;
-}
+// 	return 0;
+// }
