@@ -171,16 +171,14 @@ int RecvDnsPack(int *psockfd, ushort TransID, char *pDomainAddr)
         error("Error reading from socket\n");
 
     // Decoding Answer Record
-    answerRecord = DNSRecord::decode(buffer);
+    answerRecord = DNSRecord::decode(string(buffer, DNSRecord_size));
     if (answerRecord.TYPE != htons(0x1))
     	error("Error: Record type should be 1\n");
 
    	if (answerRecord.CLASS != htons(0x1))
     	error("Error: Record class should be 1\n");
 
-   	memcpy(pDomainAddr, buffer+DNSRecord_size-100, 100);
-    // for (int i=16;i<216;i++)
-    //     cout << buffer[i] << endl;
+   	memcpy(pDomainAddr, answerRecord.RDATA, 100);
 
 	return 0;
 }
