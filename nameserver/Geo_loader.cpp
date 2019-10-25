@@ -220,9 +220,9 @@ int Geo_loader(int argc, char const *argv[])
 
 
 int nearest_server_addr(const char *servers, char *query_ip, char *nearest_server)
-{	
-	string object_ip = string(query_ip);
-	ifstream records;
+{   
+    string object_ip = string(query_ip);
+    ifstream records;
     string record;
 
     records.open(servers);
@@ -237,88 +237,71 @@ int nearest_server_addr(const char *servers, char *query_ip, char *nearest_serve
     int serverIDs[20], clientIDs[20], book[20];
     ushort num_server=0, num_client=0, nNodes = 0, nLinks = 0;
     map<string, int> IPtoID;
-  	map<int, string> IDtoIP;
+    map<int, string> IDtoIP;
 
     // init graph
     // init adjacency table
     for (int i=0;i<20;i++)
-    	for (int j=0;j<20;j++)
-    	{
-    		edge[i][j] = INF;
-    		if(i==j)
-    			edge[i][j] = 0;
-    	}
+        for (int j=0;j<20;j++)
+        {
+            edge[i][j] = INF;
+            if(i==j)
+                edge[i][j] = 0;
+        }
 
     while(getline(records, record))
     {
-    	// cout << record <<endl;
-    	if(!strncasecmp(record.c_str(), "NUM_NODES", 9))
-    	{
-    		nNodes = ushort(atoi((char *)&record[11])); 
-    	}
-    	else if(!strncasecmp(record.c_str(), "NUM_LINKS", 9))
-    	{
-    		// cout << record <<endl;
-    		nLinks = ushort(atoi((char *)&record[11])); 
-    	}
-    	else
-    	{
-    		char token[20];
-    		char parse_str[3][20];
-    		strcpy(token, record.c_str());
-    		char *p = strtok(token, " ");
-    		for (int i = 0; p && i<3 ;i++)
-    		{
-    			strcpy(parse_str[i], p);
-    			p = strtok(NULL, " ");
-    		}
-    		if (!strcmp(parse_str[1], "CLIENT"))
-    		{
-    			int ID = atoi(parse_str[0]);
-    			string hostIP = string(parse_str[2]);
-    			clientIDs[num_client] = ID;
-    			IPtoID[hostIP] = ID;
-    			IDtoIP[ID] = hostIP;
-    			num_client++;
-    		}
-    		else if(!strcmp(parse_str[1], "SERVER"))
-    		{
-    			int ID = atoi(parse_str[0]);
-    			string hostIP = string(parse_str[2]);
-    			serverIDs[num_server] = ID;
-    			IPtoID[hostIP] = ID;
-    			IDtoIP[ID] = hostIP;
-    			num_server++;
-    		}
-    		else if(!strcmp(parse_str[1], "SWITCH"))
-    			continue;
-    		else
-    		{
-
-    			edge[atoi(parse_str[0])][atoi(parse_str[1])] = atof(parse_str[2]);
-    			edge[atoi(parse_str[1])][atoi(parse_str[0])] = atof(parse_str[2]);
+        // cout << record <<endl;
+        if(!strncasecmp(record.c_str(), "NUM_NODES", 9))
+        {
+            nNodes = ushort(atoi((char *)&record[11])); 
+        }
+        else if(!strncasecmp(record.c_str(), "NUM_LINKS", 9))
+        {
+            // cout << record <<endl;
+            nLinks = ushort(atoi((char *)&record[11])); 
+        }
+        else
+        {
+            char token[20];
+            char parse_str[3][20];
+            strcpy(token, record.c_str());
+            char *p = strtok(token, " ");
+            for (int i = 0; p && i<3 ;i++)
+            {
+                strcpy(parse_str[i], p);
+                p = strtok(NULL, " ");
             }
-    	}
+            if (!strcmp(parse_str[1], "CLIENT"))
+            {
+                int ID = atoi(parse_str[0]);
+                string hostIP = string(parse_str[2]);
+                clientIDs[num_client] = ID;
+                IPtoID[hostIP] = ID;
+                IDtoIP[ID] = hostIP;
+                num_client++;
+            }
+            else if(!strcmp(parse_str[1], "SERVER"))
+            {
+                int ID = atoi(parse_str[0]);
+                string hostIP = string(parse_str[2]);
+                serverIDs[num_server] = ID;
+                IPtoID[hostIP] = ID;
+                IDtoIP[ID] = hostIP;
+                num_server++;
+            }
+            else if(!strcmp(parse_str[1], "SWITCH"))
+                continue;
+            else
+            {
+
+                edge[atoi(parse_str[0])][atoi(parse_str[1])] = atof(parse_str[2]);
+                edge[atoi(parse_str[1])][atoi(parse_str[0])] = atof(parse_str[2]);
+            }
+        }
     }
 
-	dijkstra(IPtoID[object_ip], edge, dst, book, nNodes, nLinks);
-
-	// int serverID = distance(dst, min_element(&dst[serverIDs[0]], &dst[serverIDs[0]]+num_server));
-    // // print out the result of records
-    // cout << endl;
-    // cout << typeid(serverIDs[0]).name() << endl;
-    // cout << " distance: ";
-    // for (int i =0;i<num_server;i++)
-    //     cout << dst[serverIDs[i]] << " ";
-    // cout << endl;
-    // cout << " serverID: ";
-    // for (int i=0;i<num_server;i++)
-    //     cout << serverIDs[i] << " ";
-    // cout << endl;
-    // cout << " client ID: ";
-    // for (int i=0;i <num_client; i++)
-    //     cout << clientIDs[i] << " ";
-    // cout << endl;
+    dijkstra(IPtoID[object_ip], edge, dst, book, nNodes, nLinks);
 
     // find the closest server IP
     float min_dis = 100000.0;
@@ -333,11 +316,11 @@ int nearest_server_addr(const char *servers, char *query_ip, char *nearest_serve
     }
     // cout << " closest server ID: ";
     // cout << clst_serverID << endl;
-	string serverIP = IDtoIP[clst_serverID];
-	if (!serverIP.size())
-		cout << "Error: invalid address." <<endl;
+    string serverIP = IDtoIP[clst_serverID];
+    if (!serverIP.size())
+        cout << "Error: invalid address." <<endl;
     strcpy(nearest_server, serverIP.c_str());
 
     records.close();
-	return 0;
+    return 0;
 }

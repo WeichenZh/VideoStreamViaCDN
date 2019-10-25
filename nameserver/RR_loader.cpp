@@ -236,3 +236,8 @@ int RR_loader(int argc, char const *argv[])
         
         close(newsockfd);
     }
+    records.close();
+    close(sockfd);
+
+    return 0; 
+} 
