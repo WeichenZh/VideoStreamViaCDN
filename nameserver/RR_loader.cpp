@@ -43,21 +43,20 @@ int RR_loader(int argc, char const *argv[])
     log.close();
 
     /* Decoding query package */
-    // BYTE *pQueryPackage = (BYTE *)buffer;
     const char *domainName = "video.cse.umich.edu";
     char qDomainName[100] = {0};
     char rData[100] = {0};
     char rCode = 0;
-    DNSHeader queryHeader;
+    int DNSHeader_size, DNSQuestion_size;
+    int DNSAHeader_size, DNSARecord_size;
+    DNSHeader queryHeader,answerHeader;
     DNSQuestion queryQuestion;
-    DNSHeader answerHeader;
     DNSRecord answerRecord;
 
     /**** socket part ****/
     int sockfd, n_recv, portno;
     const int optval = 1; 
-    char buffer[MAXLINE]; 
-    char srcIPaddr[20];
+    char buffer[MAXLINE], srcIPaddr[20]; 
     struct sockaddr_in servaddr, cliaddr; 
     socklen_t len = sizeof(cliaddr);
 
@@ -96,10 +95,7 @@ int RR_loader(int argc, char const *argv[])
 
         // get DNS header size
         int DNSHeader_size;
-        n_recv = recv(newsockfd, 
-            (char *)buffer, 
-            sizeof(DNSHeader_size),  
-            0); 
+        n_recv = recv(newsockfd, (char *)buffer, sizeof(DNSHeader_size), 0); 
         if (n_recv<0)
             error("ERROR reading from socket");
         memcpy(&DNSHeader_size, (BYTE *)buffer, sizeof(DNSHeader_size));
@@ -107,35 +103,20 @@ int RR_loader(int argc, char const *argv[])
         if (DNSHeader_size <= 0)
             error("Error: DNSHeader size must be greater than 0.\n");
 
-        cout << sizeof(queryHeader) << endl;
-
         // get DNS header
         memset(buffer, 0, MAXLINE);
-        n_recv = recv(newsockfd, 
-            (char *)buffer, 
-            DNSHeader_size, 
-            0);
-        queryHeader = DNSHeader::decode(string(buffer));
+        n_recv = recv(newsockfd, (char *)buffer, DNSHeader_size, 0);
+        if (n_recv < 0) 
+            error("ERROR reading from socket");
+        queryHeader = DNSHeader::decode(string(buffer, DNSHeader_size));
 
-        // Decoding Header
         //check the AA flag
         if(queryHeader.AA != 0x0)
-        {
             error("Error: received package is not query package\n");
-        }
-
-        // Decoding question
-        /******************************************************/
-        /* TUDO: should I return error if QTYPE or QCLASS is not equal to 1? */
-        /******************************************************/
 
         // get DNS question size
-        int DNSQuestion_size;
         memset(buffer, 0, MAXLINE);
-        n_recv = recv(newsockfd, 
-            (char *)buffer, 
-            sizeof(DNSQuestion_size), 
-            0);
+        n_recv = recv(newsockfd, (char *)buffer, sizeof(DNSQuestion_size), 0);
         if (n_recv<0)
             error("ERROR reading from socket");
         memcpy(&DNSQuestion_size, (BYTE *)buffer, sizeof(DNSQuestion_size));
@@ -143,20 +124,15 @@ int RR_loader(int argc, char const *argv[])
         if (DNSQuestion_size < 0)
             error("Error: DNS question size must be greater than 0.\n");
 
-        cout << "DNSQuestion_size :" << DNSQuestion_size <<endl;
-
         // get DNS question
         memset(buffer, 0, MAXLINE);
-        n_recv = recv(newsockfd,
-            (char *)buffer,
-            DNSQuestion_size,
-            0);
+        n_recv = recv(newsockfd,(char *)buffer,DNSQuestion_size,0);
         if (n_recv<0)
             error("ERROR reading from socket");
-        queryQuestion = DNSQuestion::decode(string(buffer));
+        queryQuestion = DNSQuestion::decode(string(buffer, DNSQuestion_size));
 
 
-        // Seach for corresponding ip address
+        // Round robin balance loader
         if (!strcmp(queryQuestion.QNAME, domainName))
         {
             rCode = 0x0;
@@ -175,7 +151,6 @@ int RR_loader(int argc, char const *argv[])
             memset(rData, 0, 100);
         }
 
-        // Encoding Answer package
         // Encoding package Header
         memset(&answerHeader,0, sizeof(answerHeader));
         answerHeader.ID = queryHeader.ID;  // ID
@@ -192,25 +167,24 @@ int RR_loader(int argc, char const *argv[])
         // Encoding package record
         memset(&answerRecord, 0, sizeof(answerRecord));
         memcpy(answerRecord.NAME, queryQuestion.QNAME, 100);
+        memcpy(answerRecord.RDATA, rData, 100); 
         answerRecord.TYPE = htons(0x1);
         answerRecord.CLASS = htons(0x1);
         answerRecord.TTL = htons(0x0);
         answerRecord.RDLENGTH = htons(sizeof(answerHeader)+sizeof(answerRecord));
-        memcpy(answerRecord.RDATA, rData, 100); 
 
         // send DNS packet
         string sAnswerHeader = DNSHeader::encode(answerHeader);
         string sAnswerRecord = DNSRecord::encode(answerRecord);
-        int DNSAHeader_size = htonl(sAnswerHeader.length());
-        int DNSARecord_size = htonl(sAnswerRecord.length());
+        DNSAHeader_size = htonl(sAnswerHeader.length());
+        DNSARecord_size = htonl(sAnswerRecord.length());
         int nSent = 0;
-
-        cout << ntohl(DNSAHeader_size) << " " << ntohl(DNSARecord_size)<<endl;   
 
         nSent = send(newsockfd,
             (char *)&DNSAHeader_size,
             sizeof(DNSAHeader_size),
             0);
+
         memset(buffer, 0, MAXLINE);
         memcpy(buffer, sAnswerHeader.c_str(), ntohl(DNSAHeader_size));
         nSent = send(newsockfd, 
@@ -222,13 +196,14 @@ int RR_loader(int argc, char const *argv[])
             (char *)&DNSARecord_size,
             sizeof(DNSARecord_size),
             0);
+
         memset(buffer, 0, MAXLINE);
         memcpy(buffer, sAnswerRecord.c_str(), ntohl(DNSARecord_size));
         nSent = send(newsockfd,
             (char *)buffer,
             ntohl(DNSARecord_size),
             0);
-        cout << nSent << endl;
+
         // logging
         log.open(log_path, ios::app);
         log << srcIPaddr << " " << qDomainName << " " << rData << "\n";
